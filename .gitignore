@@ -1,0 +1,19 @@
+# binaries & builds
+/dist/
+bin/
+*.exe
+*.out
+
+# Go
+.coverage
+**/.DS_Store
+
+# local env & db
+.env
+.env.*
+*.db
+targets.json
+
+# editor/IDE
+.vscode/
+.idea/
