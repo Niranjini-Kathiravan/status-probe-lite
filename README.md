@@ -1,62 +1,57 @@
-# Status Probe lite — Monitoring Tool
+# Status Probe Lite
 
-Status Probe is a small, production-style monitoring system that tracks the availability of web services.  It automatically detects outages, classifies failure reasons, and calculates uptime percentage.
+A lightweight monitoring tool built in Go for tracking web service availability, latency, and outage states. The system automatically detects failures, classifies outage reasons, and provides a simple browser based dashboard for visualization.
 
----
+## Architecture
 
-## Overview
-
-The system is composed of two independent components:
+Status Probe Lite consists of two main components:
 
 ### Central Server
-- Stores all monitoring data in SQLite.
-- Exposes REST APIs to:
-  - Register URLs to monitor
-  - Collect health check data
-  - Compute availability and outages
-  - Register monitoring agents
+
+The central server acts as the data collection and analysis hub:
+
+- Stores monitoring data in an embedded SQLite database
+- Provides REST APIs for target management, health check ingestion, and metrics retrieval
+- Detects outages based on consecutive check failures
+- Calculates uptime percentages and availability metrics
+- Serves a web dashboard for visualization
 
 ### Agent
-- A small **Go binary** that can run anywhere — even in private networks.
-- Periodically checks target URLs and reports results to the central server.
-- Uses an API key for authentication.
-- Detects multiple failure types:
-  - `timeout`
-  - `tls_error`
-  - `dns_error`
-  - `non_2xx`
----
 
-## Tech Stack
+A lightweight Go binary that performs the actual health checks:
 
-| Layer | Technology |
-|-------|-------------|
-| Language | Go 1.22+ |
-| Framework | Gin |
-| Database | SQLite (`modernc.org/sqlite`) |
-| HTTP Client | Go `net/http` |
+- Runs anywhere with network access to both targets and the central server
+- Periodically probes configured URLs and reports results
+- Authenticates with the central server using API keys
+- Detects various failure types including timeouts, DNS errors, TLS issues, and non-2xx responses
+- Generates detailed logs for each check
 
----
+## Technology Stack
 
-## 1. Prerequisites
+- **Language**: Go 1.22+
+- **Web Framework**: Gin
+- **Database**: SQLite (modernc.org/sqlite)
+- **HTTP Client**: Go standard library net/http
+- **Frontend**: Vanilla JavaScript served via static routes
 
-- **Go** ≥ 1.22  
-- **curl** (for testing API calls)  
-- **git**  
-- **SQLite** (no manual setup needed; Go driver is embedded)
+## Prerequisites
 
----
+- Go version 1.22 or higher
+- curl (for API testing)
+- git
 
-## 2. Clone and Setup
+Note: SQLite is embedded and requires no separate installation.
+
+## Installation and Setup
+
+### Clone the Repository
 
 ```bash
 git clone https://github.com/niranjini-kathiravan/status-probe-lite.git
 cd status-probe-lite/backend
+```
 
-# Setup & Demo Guide — Status Probe Lite
-## 1. Create a `.gitignore`
-
-Exclude DB and local config files so they aren't committed:
+### Configure Git Ignore
 
 ```bash
 cat > .gitignore <<'EOF'
@@ -67,43 +62,50 @@ targets.json
 EOF
 ```
 
-## 2. Run the Central Server
+### Start the Central Server
 
 ```bash
 PORT=8080 DB_PATH=./status.db VERSION=v0.2 go run ./cmd/server
 ```
 
-Expected output:
+You should see output confirming the server has started:
 
 ```
-Loaded config → PORT=8080 DB_PATH=./status.db POLL_INTERVAL_SEC=15 GLOBAL_TIMEOUT_MS=5000 VERSION=v0.2
-Server running on :8080
+Loaded config → PORT=8080 DB_PATH=./status.db VERSION=v0.2
+Central on :8080 (db=./status.db)
 ```
 
-Health check:
+Verify the server is running:
 
 ```bash
 curl http://localhost:8080/healthz
-# ok
+# Response: ok
 ```
 
-## 3. Register an Agent
+### Register an Agent
+
+Create an agent that will perform health checks:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/agents/register \
   -H 'Content-Type: application/json' \
-  -d '{"name": "agent-local", "location": "public", "version": "v0.1"}'
+  -d '{"name": "agent-local"}' | jq
 ```
 
-Response example:
+The response will include an API key:
 
 ```json
-{"agent_id":1,"api_key":"d917741381c859387e07948f39c1e8f4901b21d2bf842386ce7f272264bd229c"}
+{
+  "agent_id": 1,
+  "api_key": "d917741381c859387e07948f39c1e8f4901b21d2bf842386ce7f272264bd229c"
+}
 ```
 
-Copy the `api_key` — the agent will need it.
+Save this API key as it will be needed to run the agent.
 
-## 4. Register Targets (URLs to Monitor)
+### Add Monitoring Targets
+
+Register the URLs to monitor:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/targets \
@@ -113,135 +115,166 @@ curl -s -X POST http://localhost:8080/api/targets \
 curl -s -X POST http://localhost:8080/api/targets \
   -H 'Content-Type: application/json' \
   -d '{"name":"httpbin-503","url":"https://httpbin.org/status/503","timeout_ms":4000}'
-
-curl -s -X POST http://localhost:8080/api/targets \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"httpbin-delay","url":"https://httpbin.org/delay/10","timeout_ms":4000}'
-
-curl -s -X POST http://localhost:8080/api/targets \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"badssl","url":"https://expired.badssl.com/","timeout_ms":4000}'
 ```
 
-Verify the targets:
+Verify targets were registered:
 
 ```bash
 curl -s http://localhost:8080/api/targets | jq
 ```
 
-## 5. Prepare and Run the Agent
+### Export Targets Configuration
 
-Once targets are registered, a targets.json file is created automatically.
+Generate a targets file for the agent:
+
+```bash
+curl -s http://localhost:8080/api/targets > ./cmd/agent/targets.json
+```
+
+The file will contain the registered targets:
 
 ```json
 [
   {"id": 1, "name": "smelinx", "url": "https://www.smelinx.com", "timeout_ms": 4000},
-  {"id": 2, "name": "httpbin-503", "url": "https://httpbin.org/status/503", "timeout_ms": 4000},
-  {"id": 3, "name": "httpbin-delay", "url": "https://httpbin.org/delay/10", "timeout_ms": 4000},
-  {"id": 4, "name": "badssl", "url": "https://expired.badssl.com/", "timeout_ms": 4000}
+  {"id": 2, "name": "httpbin-503", "url": "https://httpbin.org/status/503", "timeout_ms": 4000}
 ]
 ```
 
-Run the agent:
+### Run the Agent
+
+Start the agent with the API key:
 
 ```bash
 CENTRAL_BASE_URL=http://localhost:8080 \
-API_KEY=<API_KEY> \
-TARGETS_FILE=./targets.json \
+API_KEY=<YOUR_API_KEY> \
+TARGETS_FILE=./cmd/agent/targets.json \
 POLL_INTERVAL_SEC=15 \
 go run ./cmd/agent
 ```
 
-Agent output example:
+The agent will begin sending health check data to the server every 15 seconds.
 
-```
-[check] target=smelinx ok=true status=200 latency_ms=85 reason=
-[check] target=httpbin-503 ok=false status=503 latency_ms=1090 reason=non_2xx
-[check] target=httpbin-delay ok=false status=0 latency_ms=4000 reason=timeout
-[check] target=badssl ok=false status=0 latency_ms=500 reason=tls_error
-```
+## Using the API
 
-## 6. View Metrics & Outages
+### View Metrics
 
-Check metrics per target:
+Check the availability and performance metrics for a target:
 
 ```bash
 curl -s "http://localhost:8080/api/metrics?target_id=1" | jq
 ```
 
-### Example (Healthy Target)
+Example response for a healthy target:
 
 ```json
 {
   "availability_percent_checks": 100,
   "availability_percent_time": 100,
-  "average_latency_ms": 77,
+  "average_latency_ms": 85,
   "failed_checks": 0,
   "failures_by_reason": {},
   "outages": []
 }
 ```
 
-### Example (Failing Target)
+Example response for a failing target:
 
 ```json
 {
   "availability_percent_checks": 0,
-  "availability_percent_time": 87.4,
-  "failures_by_reason": { "tls_error": 10 },
+  "failures_by_reason": { "tls_error": 2 },
   "outages": [
     {
       "started_at": "2025-11-09T14:49:11Z",
-      "duration_ms": 452637,
       "reason": "tls_error"
     }
   ]
 }
 ```
 
-## Outage Rules
+### View Logs
 
-| State | Trigger | Action |
+Retrieve historical logs for a target:
+
+```bash
+curl -s "http://localhost:8080/api/logs?target_id=1&limit=10" | jq
+```
+
+Stream logs in real-time using Server-Sent Events:
+
+```bash
+curl -N "http://localhost:8080/api/logs/stream?target_id=1"
+```
+
+## Outage Detection
+
+The system uses the following rules to manage outage states:
+
+| Event | Trigger | Action |
 |-------|---------|--------|
-| Open Outage | 2 consecutive failed checks | Creates a new outage |
-| Close Outage | 2 consecutive successful checks | Closes the outage |
-| Reason | Frozen at open | Remains constant until close |
+| Open Outage | 2 consecutive failed checks | Creates a new outage record |
+| Close Outage | 2 consecutive successful checks | Closes the existing outage |
+| Reason | Determined at open time | Remains unchanged until outage closes |
 
-## How It Works
+## Web Dashboard
 
-- **Central server** hosts APIs & database.
-- **Agents** run anywhere (public/private), poll URLs, and push results.
-- **Server** detects outages & computes uptime/availability metrics.
-- System scales horizontally — any number of agents can push to one central server.
+Access the dashboard by visiting:
 
-## Example Demo Flow
+```
+http://localhost:8080/dashboard
+```
 
-| Step | Command | Purpose |
-|------|---------|---------|
-| 1 | `go run ./cmd/server` | Start central server |
-| 2 | Register agent | Get API key |
-| 3 | Add targets | Define URLs to monitor |
-| 4 | Run agent | Start polling |
-| 5 | `curl /api/metrics` | Inspect outages & uptime |
+The dashboard provides:
 
-Folder Structure:
+- Target management (add and delete targets)
+- Agent registration with API key generation
+- Live outage status indicators (Healthy / Issue)
+- Real-time availability metrics and failure reasons
 
+## Testing Outage Scenarios
+
+The system includes a demo mode for testing outage detection:
+
+Simulate an outage:
+
+```bash
+curl -s "http://localhost:8080/demo/set?to=https://httpbin.org/status/503"
+```
+
+Resolve the outage:
+
+```bash
+curl -s "http://localhost:8080/demo/set?to=https://httpbin.org/status/200"
+```
+
+This allows you to verify the outage detection logic and dashboard behavior without waiting for real failures.
+
+## Project Structure
+
+```
 backend/
 ├── cmd/
 │   ├── server/       # Central server entrypoint
-│   └── agent/        # Agent entrypoint
+│   └── agent/        # Agent binary
 ├── internal/
-│   ├── api/          # HTTP handlers and routes for agents, targets, ingest and metrics
-│   ├── store/        # SQLite persistence layer
-│   ├── config/       # env config file
-├── targets.json       # Generated automatically
-├── status.db          # SQLite database
+│   ├── api/          # HTTP routes (targets, agents, ingest, logs, metrics)
+│   ├── store/        # SQLite layer (tables: targets, checks, outages, agents, logs)
+│   ├── config/       # Config loader (env-based)
+│   └── web/static/   # Dashboard (HTML/JS)
+├── targets.json      # Exported targets configuration
+├── status.db         # SQLite database
 └── go.mod
+```
 
+## API Endpoints
 
-Further Steps:
+- `GET /healthz` - Health check
+- `POST /api/targets` - Register a monitoring target
+- `GET /api/targets` - List all targets
+- `POST /api/agents/register` - Create a new agent
+- `POST /api/ingest/checks` - Submit health check results (agent endpoint)
+- `GET /api/metrics` - Retrieve metrics for a target
+- `GET /api/logs` - Get historical logs
+- `GET /api/logs/stream` - Stream logs in real-time
+- `GET /dashboard` - Web dashboard interface
 
-1. Add a simple dashboard to see the logs 
-2. Demo toggler to show the open and close of an outage 
-3. Demo Agent in a private network 
-4. Integrate containerisation (Docker)
