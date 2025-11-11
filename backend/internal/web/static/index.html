@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Status Probe – Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    body { margin: 24px; background:#f7f7f8; color:#111; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+    .title { margin:0; font-size:24px; font-weight:700; letter-spacing:0.2px; }
+    .muted { color:#666; font-size:13px; }
+
+    /* Panels */
+    .panel-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(320px,1fr)); gap:16px; margin-bottom:18px; }
+    .panel { background:#fff; border:1px solid #eaeaea; border-radius:14px; padding:14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .panel h3 { margin:0 0 10px 0; font-size:16px; }
+    .form-row { display:flex; gap:8px; flex-wrap:wrap; }
+    .field { display:flex; flex-direction:column; gap:6px; flex:1 1 180px; min-width:180px; }
+    label { font-size:12px; color:#555; }
+    input { padding:8px 10px; border:1px solid #ddd; border-radius:10px; background:#fff; }
+    .btn { padding:9px 12px; border:1px solid #ddd; border-radius:10px; background:#fff; cursor:pointer; font-weight:600; }
+    .btn:hover { background:#f3f3f3; }
+    .btn.primary { background:#111; color:#fff; border-color:#111; }
+    .btn.primary:hover { background:#000; }
+    .btn.ghost { background:#fff; }
+    .inline { display:inline-flex; gap:8px; align-items:center; }
+
+    .key-badge { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; background:#f6f6f7; border:1px solid #eee; border-radius:10px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size:12px; color:#333; }
+    .key-badge code { background:transparent; border:none; padding:0; }
+
+    /* Cards */
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
+    .card { background:#fff; border:1px solid #ececed; border-radius:14px; padding:16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .row { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+    .name { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .url { font-size:12px; color:#555; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .badge { border-radius:999px; padding:3px 10px; font-size:12px; border:1px solid #ddd; font-weight:700; }
+    .ok { background:#eaf9ee; color:#065b2f; border-color:#c9efd6; }
+    .fail { background:#ffefef; color:#7a0916; border-color:#ffd0c9; }
+    .warn { background:#fff7e6; color:#7a4b00; border-color:#ffe2b2; }
+    .kv { display:grid; grid-template-columns: 1fr auto; gap:6px; margin-top:12px; font-size:13px; }
+    .key { color:#666; }
+    .actions { margin-top:12px; display:flex; gap:10px; justify-content:flex-end; }
+    .btn.danger { color:#7a0916; border-color:#ffc7bf; }
+    .empty { background:#fff; border:1px dashed #ddd; padding:16px; border-radius:12px; color:#444; }
+
+    /* Small helper text */
+    .hint { font-size:12px; color:#777; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1 class="title">Status Probe – Dashboard</h1>
+        <div class="muted">Auto-refreshes every 15s • last 15 min window</div>
+      </div>
+      <div>
+        <button id="refresh" class="btn ghost">Refresh</button>
+      </div>
+    </header>
+
+    <!-- Controls -->
+    <section class="panel-grid">
+      <div class="panel">
+        <h3>Add Target</h3>
+        <div class="form-row" style="margin-bottom:10px;">
+          <div class="field">
+            <label for="t-name">Target name</label>
+            <input id="t-name" placeholder="e.g. smelinx" />
+          </div>
+          <div class="field" style="flex:2 1 260px; min-width:260px;">
+            <label for="t-url">URL</label>
+            <input id="t-url" placeholder="https://example.com" />
+          </div>
+          <div class="field" style="max-width:180px;">
+            <label for="t-timeout">Timeout (ms)</label>
+            <input id="t-timeout" type="number" placeholder="4000" />
+          </div>
+        </div>
+        <div class="inline">
+          <button id="add-target" class="btn primary">Add target</button>
+          <span class="hint">Targets appear in the grid below immediately.</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Register Agent</h3>
+        <div class="form-row" style="margin-bottom:10px;">
+          <div class="field" style="max-width:260px;">
+            <label for="agent-name">Agent name</label>
+            <input id="agent-name" placeholder="e.g. agent-local" />
+          </div>
+        </div>
+        <div class="inline" style="margin-bottom:10px;">
+          <button id="register-agent" class="btn primary">Register agent</button>
+          <button id="copy-key" class="btn ghost" title="Copy last API key" disabled>Copy key</button>
+        </div>
+        <div class="key-badge" id="key-container" style="display:none;">
+          <span>API key:</span>
+          <code id="last-key"></code>
+        </div>
+        <div class="hint" style="margin-top:8px;">Use this key in the agent env: <code>API_KEY=...</code></div>
+      </div>
+    </section>
+
+    <!-- Cards -->
+    <section id="grid" class="grid"></section>
+  </div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const REFRESH_MS = 15000;
+    let lastApiKey = '';
+
+    const $ = (id) => document.getElementById(id);
+
+    async function fetchJSON(url, opts){
+      const res = await fetch(url, opts);
+      if(!res.ok) throw new Error(`${url} -> ${res.status}`);
+      if (res.status === 204) return null;
+      return res.json();
+    }
+
+    function rfc3339(d){ return new Date(d).toISOString().replace(/\.\d+Z$/, 'Z'); }
+
+    function reasonLabel(r){
+      if(!r) return '—';
+      const map = { timeout:'Timeout', tls_error:'TLS Error', dns_error:'DNS Error', non_2xx:'HTTP Error' };
+      return map[r] || r;
+    }
+
+    async function load(){
+      grid.innerHTML = '';
+      let targets = [];
+      try {
+        targets = await fetchJSON('/api/targets');
+      } catch(e){
+        grid.innerHTML = `<div class="empty">Failed to load targets: ${String(e)}</div>`;
+        return;
+      }
+
+      if (!targets.length) {
+        grid.innerHTML = '<div class="empty"><b>No targets yet.</b> Add one above.</div>';
+        return;
+      }
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 15*60*1000);
+      const qs = `from=${encodeURIComponent(rfc3339(from))}&to=${encodeURIComponent(rfc3339(to))}`;
+
+      for(const t of targets){
+        const tid = t.id ?? t.ID; // robust if backend ever sends PascalCase
+        if (typeof tid !== 'number' || Number.isNaN(tid)) continue;
+
+        let metrics; 
+        try { 
+          metrics = await fetchJSON(`/api/metrics?target_id=${tid}&${qs}`)
+        } catch (e) {
+          metrics = { failed: true, error: String(e) };
+        }
+
+        let badgeClass='warn', badgeText='NO DATA', outages=[], avail=0, lastReason='';
+        if (!metrics.failed) {
+          outages = Array.isArray(metrics.outages) ? metrics.outages : [];
+          const hasOpen = outages.some(o => !o.ended_at);
+          avail = metrics.availability_percent_checks ?? 0;
+          badgeClass = hasOpen ? 'fail' : 'ok';
+          badgeText  = hasOpen ? 'ISSUE' : 'HEALTHY';
+          lastReason = outages.length ? outages[outages.length-1].reason : '';
+        }
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="row">
+            <div>
+              <div class="name">${(t.name ?? t.Name ?? '').trim() || '(unnamed)'}</div>
+              <div class="url" title="${t.url ?? t.URL}">${t.url ?? t.URL}</div>
+            </div>
+            <span class="badge ${badgeClass}">${badgeText}</span>
+          </div>
+          <div class="kv">
+            <div class="key">Availability (checks):</div><div>${(avail||0).toFixed(1)}%</div>
+            <div class="key">Avg latency (OK):</div><div>${metrics.average_latency_ms||0} ms</div>
+            <div class="key">Failed checks:</div><div>${metrics.failed_checks||0}</div>
+            <div class="key">Current outage:</div><div>${outages.some(o => !o.ended_at) ? 'OPEN' : '—'}</div>
+            <div class="key">Last reason:</div><div>${reasonLabel(lastReason)}</div>
+          </div>
+          <div class="actions">
+            <button data-del="${tid}" class="btn danger">Delete</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+
+      document.querySelectorAll('button[data-del]').forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute('data-del');
+          if (!confirm('Delete target #' + id + ' ?')) return;
+          try {
+            await fetchJSON('/api/targets/' + id, { method: 'DELETE' });
+            load();
+          } catch(e) {
+            alert('Delete failed: ' + e);
+          }
+        };
+      });
+    }
+
+    // Actions
+    $('refresh').onclick = load;
+
+    $('add-target').onclick = async () => {
+      const name = $('t-name').value.trim();
+      const url  = $('t-url').value.trim();
+      const tmo  = parseInt(($('t-timeout').value||'').trim()||'4000', 10);
+      if (!url) { alert('URL is required'); return }
+      try {
+        await fetchJSON('/api/targets', { 
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body: JSON.stringify({name, url, timeout_ms: tmo})
+        });
+        $('t-name').value=''; $('t-url').value=''; $('t-timeout').value='';
+        load();
+      } catch(e){ alert('Create failed: ' + e) }
+    };
+
+    $('register-agent').onclick = async () => {
+      const name = $('agent-name').value.trim() || 'agent';
+      try {
+        const res = await fetchJSON('/api/agents/register', { 
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body: JSON.stringify({name})
+        });
+        lastApiKey = res.api_key || '';
+        const keyWrap = $('key-container');
+        const keySpan = $('last-key');
+        keySpan.textContent = lastApiKey ? lastApiKey : '';
+        keyWrap.style.display = lastApiKey ? 'inline-flex' : 'none';
+        const copyBtn = $('copy-key');
+        copyBtn.disabled = !lastApiKey;
+        alert('Agent registered.\nID: ' + res.agent_id + '\nAPI Key: ' + res.api_key + '\n\nCopy this key for your agent env.');
+      } catch(e) { alert('Register failed: ' + e) }
+    };
+
+    $('copy-key').onclick = async () => {
+      if (!lastApiKey) return;
+      try {
+        await navigator.clipboard.writeText(lastApiKey);
+        alert('API key copied');
+      } catch { alert('Copy failed'); }
+    };
+
+    load();
+    setInterval(load, REFRESH_MS);
+  </script>
+</body>
+</html>
