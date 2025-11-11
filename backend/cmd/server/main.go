@@ -38,9 +38,13 @@ func main() {
 	api.NewTargetsHandler(st).Register(r)
 	api.NewMetricsHandler(st).Register(r)
 
+	// logs: history + SSE
+	logs := api.NewLogsHandler(st)
+	logs.Register(r)
+
 	// agent registration & ingest
-	api.NewAgentsHandler(st).Register(r) // POST /api/agents/register
-	api.NewIngestHandler(st).Register(r) // POST /api/ingest/checks (X-Api-Key)
+	api.NewAgentsHandler(st).Register(r)       // POST /api/agents/register
+	api.NewIngestHandler(st, logs).Register(r) // POST /api/ingest/checks (X-Api-Key)
 
 	// static dashboard
 	r.Static("/dashboard", "./internal/web/static")
