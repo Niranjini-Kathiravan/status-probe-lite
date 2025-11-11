@@ -55,6 +55,16 @@ func (s *Store) migrate() error {
 			api_key TEXT NOT NULL UNIQUE,
 			created_at TIMESTAMP NOT NULL
 		);`,
+		// NEW: logs table
+		`CREATE TABLE IF NOT EXISTS logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			target_id INTEGER NOT NULL,
+			check_id INTEGER,
+			ts TIMESTAMP NOT NULL,
+			level TEXT NOT NULL,
+			line TEXT NOT NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_logs_target_ts ON logs(target_id, ts DESC);`,
 	}
 	for _, q := range stmts {
 		if _, err := s.DB.Exec(q); err != nil {
@@ -76,7 +86,9 @@ type TargetRow struct {
 
 func (s *Store) InsertTarget(ctx context.Context, name, url string, timeoutMs int) (int64, error) {
 	now := time.Now().UTC()
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO targets(name,url,timeout_ms,created_at) VALUES(?,?,?,?)`, name, url, timeoutMs, now)
+	res, err := s.DB.ExecContext(ctx,
+		`INSERT INTO targets(name,url,timeout_ms,created_at) VALUES(?,?,?,?)`,
+		name, url, timeoutMs, now)
 	if err != nil {
 		return 0, err
 	}
@@ -84,7 +96,8 @@ func (s *Store) InsertTarget(ctx context.Context, name, url string, timeoutMs in
 }
 
 func (s *Store) ListTargets(ctx context.Context) ([]TargetRow, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,name,url,timeout_ms,created_at FROM targets ORDER BY id ASC`)
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id,name,url,timeout_ms,created_at FROM targets ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +114,9 @@ func (s *Store) ListTargets(ctx context.Context) ([]TargetRow, error) {
 }
 
 func (s *Store) DeleteTarget(ctx context.Context, id int64) error {
-	_, _ = s.DB.ExecContext(ctx, `DELETE FROM checks WHERE target_id=?`, id)
+	_, _ = s.DB.ExecContext(ctx, `DELETE FROM checks  WHERE target_id=?`, id)
 	_, _ = s.DB.ExecContext(ctx, `DELETE FROM outages WHERE target_id=?`, id)
+	_, _ = s.DB.ExecContext(ctx, `DELETE FROM logs    WHERE target_id=?`, id)
 	_, err := s.DB.ExecContext(ctx, `DELETE FROM targets WHERE id=?`, id)
 	return err
 }
@@ -120,12 +134,16 @@ type CheckRow struct {
 }
 
 func (s *Store) InsertCheck(ctx context.Context, targetID int64, ts time.Time, status int, ok bool, latencyMs int, reason string) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO checks(target_id,ts,status_code,ok,latency_ms,error) VALUES(?,?,?,?,?,?)`, targetID, ts, status, btoi(ok), latencyMs, reason)
+	_, err := s.DB.ExecContext(ctx,
+		`INSERT INTO checks(target_id,ts,status_code,ok,latency_ms,error) VALUES(?,?,?,?,?,?)`,
+		targetID, ts, status, btoi(ok), latencyMs, reason)
 	return err
 }
 
 func (s *Store) GetRecentChecks(ctx context.Context, targetID int64, limit int) ([]CheckRow, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,target_id,ts,status_code,ok,latency_ms,error FROM checks WHERE target_id=? ORDER BY ts DESC LIMIT ?`, targetID, limit)
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id,target_id,ts,status_code,ok,latency_ms,error
+		 FROM checks WHERE target_id=? ORDER BY ts DESC LIMIT ?`, targetID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +172,10 @@ type OutageRow struct {
 }
 
 func (s *Store) GetOpenOutage(ctx context.Context, targetID int64) (*OutageRow, error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT id,target_id,started_at,ended_at,reason FROM outages WHERE target_id=? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`, targetID)
+	row := s.DB.QueryRowContext(ctx,
+		`SELECT id,target_id,started_at,ended_at,reason
+		 FROM outages WHERE target_id=? AND ended_at IS NULL
+		 ORDER BY started_at DESC LIMIT 1`, targetID)
 	var o OutageRow
 	if err := row.Scan(&o.ID, &o.TargetID, &o.StartedAt, &o.EndedAt, &o.Reason); err != nil {
 		if err == sql.ErrNoRows {
@@ -166,12 +187,15 @@ func (s *Store) GetOpenOutage(ctx context.Context, targetID int64) (*OutageRow, 
 }
 
 func (s *Store) OpenOutage(ctx context.Context, targetID int64, startedAt time.Time, reason string) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO outages(target_id,started_at,reason) VALUES(?,?,?)`, targetID, startedAt, reason)
+	_, err := s.DB.ExecContext(ctx,
+		`INSERT INTO outages(target_id,started_at,reason) VALUES(?,?,?)`,
+		targetID, startedAt, reason)
 	return err
 }
 
 func (s *Store) CloseOutage(ctx context.Context, id int64, endedAt time.Time) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE outages SET ended_at=? WHERE id=?`, endedAt, id)
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE outages SET ended_at=? WHERE id=?`, endedAt, id)
 	return err
 }
 
@@ -183,7 +207,9 @@ type ReasonCount struct {
 }
 
 func (s *Store) CountChecksAgg(ctx context.Context, targetID int64, from, to time.Time) (total, success int64, err error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT COUNT(*), SUM(CASE WHEN ok=1 THEN 1 ELSE 0 END) FROM checks WHERE target_id=? AND ts>=? AND ts<?`, targetID, from, to)
+	row := s.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*), SUM(CASE WHEN ok=1 THEN 1 ELSE 0 END)
+		 FROM checks WHERE target_id=? AND ts>=? AND ts<?`, targetID, from, to)
 	if err := row.Scan(&total, &success); err != nil {
 		return 0, 0, err
 	}
@@ -191,7 +217,10 @@ func (s *Store) CountChecksAgg(ctx context.Context, targetID int64, from, to tim
 }
 
 func (s *Store) AvgLatencyOK(ctx context.Context, targetID int64, from, to time.Time) (sql.NullFloat64, error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT AVG(latency_ms) FROM checks WHERE target_id=? AND ok=1 AND ts>=? AND ts<?`, targetID, from, to)
+	row := s.DB.QueryRowContext(ctx,
+		`SELECT AVG(latency_ms)
+		 FROM checks WHERE target_id=? AND ok=1 AND ts>=? AND ts<?`,
+		targetID, from, to)
 	var avg sql.NullFloat64
 	if err := row.Scan(&avg); err != nil {
 		return sql.NullFloat64{}, err
@@ -200,7 +229,11 @@ func (s *Store) AvgLatencyOK(ctx context.Context, targetID int64, from, to time.
 }
 
 func (s *Store) FailuresByReason(ctx context.Context, targetID int64, from, to time.Time) ([]ReasonCount, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT error, COUNT(*) FROM checks WHERE target_id=? AND ok=0 AND ts>=? AND ts<? GROUP BY error ORDER BY COUNT(*) DESC`, targetID, from, to)
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT error, COUNT(*) FROM checks
+		 WHERE target_id=? AND ok=0 AND ts>=? AND ts<? 
+		 GROUP BY error ORDER BY COUNT(*) DESC`,
+		targetID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +250,13 @@ func (s *Store) FailuresByReason(ctx context.Context, targetID int64, from, to t
 }
 
 func (s *Store) ListOutagesOverlapping(ctx context.Context, targetID int64, from, to time.Time) ([]OutageRow, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,target_id,started_at,ended_at,reason FROM outages WHERE target_id=? AND NOT (COALESCE(ended_at, ?) <= ? OR started_at >= ?) ORDER BY started_at ASC`, targetID, to, from, to)
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id,target_id,started_at,ended_at,reason
+		 FROM outages
+		 WHERE target_id=?
+		   AND NOT (COALESCE(ended_at, ?) <= ? OR started_at >= ?)
+		 ORDER BY started_at ASC`,
+		targetID, to, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +283,9 @@ type AgentRow struct {
 
 func (s *Store) CreateAgent(ctx context.Context, name, apiKey string) (int64, error) {
 	now := time.Now().UTC()
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO agents(name,api_key,created_at) VALUES(?,?,?)`, name, apiKey, now)
+	res, err := s.DB.ExecContext(ctx,
+		`INSERT INTO agents(name,api_key,created_at) VALUES(?,?,?)`,
+		name, apiKey, now)
 	if err != nil {
 		return 0, err
 	}
@@ -252,7 +293,8 @@ func (s *Store) CreateAgent(ctx context.Context, name, apiKey string) (int64, er
 }
 
 func (s *Store) FindAgentByKey(ctx context.Context, key string) (*AgentRow, error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT id,name,api_key,created_at FROM agents WHERE api_key=?`, key)
+	row := s.DB.QueryRowContext(ctx,
+		`SELECT id,name,api_key,created_at FROM agents WHERE api_key=?`, key)
 	var a AgentRow
 	if err := row.Scan(&a.ID, &a.Name, &a.APIKey, &a.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
@@ -268,4 +310,61 @@ func btoi(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// -------- LOGS (NEW) --------
+
+type LogRow struct {
+	ID       int64
+	TargetID int64
+	CheckID  sql.NullInt64
+	TS       time.Time
+	Level    string
+	Line     string
+}
+
+func (s *Store) InsertCheckLog(ctx context.Context, targetID int64, checkID *int64, ts time.Time, level, line string) error {
+	var cid interface{}
+	if checkID != nil {
+		cid = *checkID
+	} else {
+		cid = nil
+	}
+	_, err := s.DB.ExecContext(ctx,
+		`INSERT INTO logs(target_id,check_id,ts,level,line) VALUES(?,?,?,?,?)`,
+		targetID, cid, ts, level, line)
+	return err
+}
+
+func (s *Store) ListLogs(ctx context.Context, targetID int64, limit int, before *time.Time) ([]LogRow, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	var rows *sql.Rows
+	var err error
+	if before != nil {
+		rows, err = s.DB.QueryContext(ctx,
+			`SELECT id,target_id,check_id,ts,level,line
+			 FROM logs WHERE target_id=? AND ts<? 
+			 ORDER BY ts DESC LIMIT ?`, targetID, *before, limit)
+	} else {
+		rows, err = s.DB.QueryContext(ctx,
+			`SELECT id,target_id,check_id,ts,level,line
+			 FROM logs WHERE target_id=? 
+			 ORDER BY ts DESC LIMIT ?`, targetID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []LogRow
+	for rows.Next() {
+		var r LogRow
+		if err := rows.Scan(&r.ID, &r.TargetID, &r.CheckID, &r.TS, &r.Level, &r.Line); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
