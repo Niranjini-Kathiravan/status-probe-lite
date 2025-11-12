@@ -1,0 +1,24 @@
+# use Go 1.25 to satisfy go.mod requirement
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/agent ./cmd/agent
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=build /out/agent /app/agent
+
+# defaults; API_KEY must come from env / .env
+ENV CENTRAL_BASE_URL=http://server:8080 \
+    POLL_INTERVAL_SEC=15 \
+    TARGETS_FILE=/app/targets.json
+
+# optional: include a sample targets.json, or mount one at runtime
+# COPY ./cmd/agent/targets.json /app/targets.json
+
+CMD ["/app/agent"]

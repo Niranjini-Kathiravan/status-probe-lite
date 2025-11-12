@@ -1,0 +1,32 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: sp-server
+    environment:
+      - PORT=8080
+      - DB_PATH=/data/status.db
+      - VERSION=v0.2
+    volumes:
+      - sp_data:/data
+    ports:
+      - "8080:8080"
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: sp-agent
+    depends_on:
+      - server
+    env_file: .env
+    environment:
+      - CENTRAL_BASE_URL=http://server:8080
+      - POLL_INTERVAL_SEC=15
+      - TARGETS_FILE=/app/targets.json
+    volumes:
+      - ./cmd/agent/targets.json:/app/targets.json:ro
+
+volumes:
+  sp_data:
