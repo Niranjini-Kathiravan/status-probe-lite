@@ -6,6 +6,10 @@ A lightweight monitoring tool built in Go for tracking web service availability,
 
 Status Probe Lite has two main building blocks:
 
+## Architecture
+
+![Architecture Diagram](docs/images/status-probe-lite.drawio.png)
+
 ### Central Server
 
 The central server stores monitoring data in an embedded SQLite database and exposes REST APIs to manage monitored targets, register agents, ingest health checks, and expose metrics and outages. It detects outages based on consecutive failed checks, calculates uptime and latency metrics, and serves a static web dashboard for visualization.
