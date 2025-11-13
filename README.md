@@ -286,6 +286,7 @@ docker ps
 - User Authentication: multi-tenant dashboards and API key management
 - Agent Auto-Discovery: dynamic registration and configuration rollout
 - Kubernetes Deployment: Helm chart for scalable deployment across clusters
+- Certificate-Based Authentication: instead of API key authentication, certificate-based authentication can also be implemented to have secure communication between agents and central server
 
 ## Note
 
