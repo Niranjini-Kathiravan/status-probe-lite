@@ -287,6 +287,9 @@ docker ps
 - Agent Auto-Discovery: dynamic registration and configuration rollout
 - Kubernetes Deployment: Helm chart for scalable deployment across clusters
 
-## Note on Docker Networking
+## Note
 
-For convenience and simplicity, both the central server and the agent containers run inside the same Docker network. This avoids network configuration overhead while still demonstrating a multi-agent architecture, because the agent communicates with the server exactly the same way it would across real networks (public cloud, private subnets, or on-prem systems).
+1. For convenience and simplicity, both the central server and the agent containers run inside the same Docker network. This avoids network configuration overhead while still demonstrating a multi-agent architecture, because the agent communicates with the server exactly the same way it would across real networks (public cloud, private subnets, or on-prem systems).
+
+2. SQLite is used for the challenge to keep setup simple.
+For production-scale deployments, this architecture can easily switch to PostgreSQL or any managed SQL database.
