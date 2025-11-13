@@ -6,7 +6,7 @@ A lightweight monitoring tool built in Go for tracking web service availability,
 
 Status Probe Lite has two main building blocks:
 
-## Architecture
+## Central Server with Multi-Agent Design 
 
 ![Architecture Diagram](docs/images/status-probe-lite.drawio.png)
 
