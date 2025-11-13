@@ -135,6 +135,23 @@ List registered targets:
 curl -s http://localhost:8080/api/targets | jq
 ```
 
+#### Registering Targets from the Dashboard
+
+In addition to using curl, you can add monitoring targets directly from the dashboard UI at:
+
+```
+http://localhost:8080/dashboard/
+```
+
+The dashboard allows you to:
+- Enter a target name
+- Enter a URL to monitor
+- Set a timeout
+- Click "Add Target" to register it instantly
+- See the new target appear in the UI and in the server's database
+
+This is often easier than using API calls, especially while demoing the tool.
+
 ### 7. Export Targets for the Agent
 
 ```bash
@@ -143,7 +160,35 @@ curl -s http://localhost:8080/api/targets > ./cmd/agent/targets.json
 
 This file is bind-mounted into the agent container as its target list.
 
-**Note**: After running the agent if you add a new target please make sure to bind-mount into the agent container as its target list.
+#### Note: Re-export Targets for Agents (Bind Mounting)
+
+The agent reads its list of URLs to monitor from a local targets.json file. So after you add new targets from the dashboard you must update the file that the agent container uses.
+
+If using Docker:
+
+```bash
+curl -s http://localhost:8080/api/targets > ./cmd/agent/targets.json
+```
+
+Since the agent container bind-mounts this file:
+
+```yaml
+volumes:
+  - ./cmd/agent/targets.json:/app/targets.json
+```
+
+You must update the file and restart the agent to load the new targets:
+
+```bash
+docker compose restart agent
+```
+
+**Why this is needed**: The agent does not dynamically fetch targets from the server. This was intentional for the challenge:
+- Keeps the agent lightweight
+- Works in private networks with no inbound server access
+- Keeps the communication model simple (push-only)
+
+In a production version, the agent could actively pull targets from the server.
 
 ### 8. Start the Agent
 
@@ -202,8 +247,7 @@ To properly exercise the monitoring and classification logic, the project uses w
 
 httpbin.org is a public HTTP testing service. It lets you return specific HTTP status codes (like `https://httpbin.org/status/503` which always returns 503 Service Unavailable) and simulate latency (like `https://httpbin.org/delay/10` which waits 10 seconds before responding).
 
-We use it to reliably trigger non_2xx failures, simulate timeouts by using delayed responses, and demonstrate
- failing targets, outage detection, and different failure reasons in the metrics.
+We use it to reliably trigger non_2xx failures, simulate timeouts by using delayed responses, and demonstrate failing targets, outage detection, and different failure reasons in the metrics.
 
 ### badssl.com
 
@@ -296,5 +340,8 @@ docker ps
 
 1. For convenience and simplicity, both the central server and the agent containers run inside the same Docker network. This avoids network configuration overhead while still demonstrating a multi-agent architecture, because the agent communicates with the server exactly the same way it would across real networks (public cloud, private subnets, or on-prem systems).
 
-2. SQLite is used for the challenge to keep setup simple.
-For production-scale deployments, this architecture can easily switch to PostgreSQL or any managed SQL database.
+2. SQLite is used for the challenge to keep setup simple. For production-scale deployments, this architecture can easily switch to PostgreSQL or any managed SQL database.
+
+## License
+
+This project was developed as part of an SAP interview development challenge.
