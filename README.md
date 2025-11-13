@@ -286,3 +286,7 @@ docker ps
 - User Authentication: multi-tenant dashboards and API key management
 - Agent Auto-Discovery: dynamic registration and configuration rollout
 - Kubernetes Deployment: Helm chart for scalable deployment across clusters
+
+## Note on Docker Networking
+
+For convenience and simplicity, both the central server and the agent containers run inside the same Docker network. This avoids network configuration overhead while still demonstrating a multi-agent architecture, because the agent communicates with the server exactly the same way it would across real networks (public cloud, private subnets, or on-prem systems).
