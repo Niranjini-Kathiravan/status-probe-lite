@@ -126,7 +126,7 @@ curl -s -X POST http://localhost:8080/api/targets \
 
 curl -s -X POST http://localhost:8080/api/targets \
   -H 'Content-Type: application/json' \
-  -d '{"name":"httpbin-503","url":"https://httpbin.org/status/503","timeout_ms":4000}'
+  -d '{"name":"httpbin-503","url":"https://httpbin.org/status/200%2C%20200%2C%20200%2C%20503","timeout_ms":4000}'
 ```
 
 List registered targets:
@@ -337,11 +337,6 @@ docker ps
 - Certificate-Based Authentication: instead of API key authentication, certificate-based authentication can also be implemented to have secure communication between agents and central server
 
 ## Note
+1. SQLite is used to keep setup simple. For production-scale deployments, this architecture can easily switch to PostgreSQL or any managed SQL database.
 
-1. For convenience and simplicity, both the central server and the agent containers run inside the same Docker network. This avoids network configuration overhead while still demonstrating a multi-agent architecture, because the agent communicates with the server exactly the same way it would across real networks (public cloud, private subnets, or on-prem systems).
 
-2. SQLite is used for the challenge to keep setup simple. For production-scale deployments, this architecture can easily switch to PostgreSQL or any managed SQL database.
-
-## License
-
-This project was developed as part of an SAP interview development challenge.
